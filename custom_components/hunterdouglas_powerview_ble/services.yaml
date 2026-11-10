@@ -1,0 +1,22 @@
+set_tdbu_position:
+  target:
+    entity:
+      integration: hunterdouglas_powerview_ble
+      domain: cover
+  fields:
+    top_position:
+      required: true
+      example: 100
+      selector:
+        number:
+          min: 0
+          max: 100
+          unit_of_measurement: "%"
+    bottom_position:
+      required: true
+      example: 0
+      selector:
+        number:
+          min: 0
+          max: 100
+          unit_of_measurement: "%"
