@@ -21,6 +21,11 @@ CONF_FRIENDLY_NAMES: Final[str] = "friendly_names"
 # paid on first discovery rather than on every restart.
 CONF_POWER_TYPES: Final[str] = "power_types"
 
+# Moves both rails of a top-down/bottom-up shade in one command.
+SERVICE_SET_TDBU_POSITION: Final[str] = "set_tdbu_position"
+ATTR_TOP_POSITION: Final[str] = "top_position"
+ATTR_BOTTOM_POSITION: Final[str] = "bottom_position"
+
 # dispatcher signal for newly discovered shades (format with entry_id)
 SIGNAL_NEW_SHADE: Final[str] = f"{DOMAIN}_new_shade_{{entry_id}}"
 

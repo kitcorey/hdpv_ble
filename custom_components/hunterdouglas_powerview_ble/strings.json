@@ -87,5 +87,21 @@
         "name": "Mode reset required"
       }
     }
+  },
+  "services": {
+    "set_tdbu_position": {
+      "name": "Set top-down/bottom-up position",
+      "description": "Moves both rails of a top-down/bottom-up shade in one command. Target either rail entity of the shade. The bottom rail can't be above the top rail.",
+      "fields": {
+        "top_position": {
+          "name": "Top rail position",
+          "description": "Where the top rail goes: 0 is all the way down, 100 all the way up."
+        },
+        "bottom_position": {
+          "name": "Bottom rail position",
+          "description": "Where the bottom rail goes: 0 is all the way down, 100 all the way up."
+        }
+      }
+    }
   }
 }

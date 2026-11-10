@@ -4,6 +4,7 @@ from math import ceil
 from typing import Any
 
 from bleak.exc import BleakError
+import voluptuous as vol
 
 from homeassistant.components.bluetooth.passive_update_coordinator import (
     PassiveBluetoothCoordinatorEntity,
@@ -18,12 +19,24 @@ from homeassistant.components.cover import (
     CoverEntityFeature,
 )
 from homeassistant.core import HomeAssistant, callback
+from homeassistant.exceptions import ServiceValidationError
+from homeassistant.helpers import entity_platform
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
 from . import ConfigEntryType, async_setup_shade_platform
 from .api import CLOSED_POSITION, KEEP_POSITION, OPEN_POSITION, ShadeMove
-from .const import DOMAIN, LOGGER
+from .const import (
+    ATTR_BOTTOM_POSITION,
+    ATTR_TOP_POSITION,
+    DOMAIN,
+    LOGGER,
+    SERVICE_SET_TDBU_POSITION,
+)
 from .coordinator import PVCoordinator
+
+_RAIL_POSITION = vol.All(
+    vol.Coerce(int), vol.Range(min=CLOSED_POSITION, max=OPEN_POSITION)
+)
 
 # Position at which the duolite front sheer hands over to the rear opaque
 # fabric. One motor drives both, so Home Assistant's single 0-100 scale is
@@ -71,6 +84,14 @@ async def async_setup_entry(
 ) -> None:
     """Set up the cover platform."""
     async_setup_shade_platform(hass, config_entry, async_add_entities, _add_entities)
+    entity_platform.async_get_current_platform().async_register_entity_service(
+        SERVICE_SET_TDBU_POSITION,
+        {
+            vol.Required(ATTR_TOP_POSITION): _RAIL_POSITION,
+            vol.Required(ATTR_BOTTOM_POSITION): _RAIL_POSITION,
+        },
+        "async_set_tdbu_position",
+    )
 
 
 class PowerViewCoverBase(PassiveBluetoothCoordinatorEntity[PVCoordinator], CoverEntity):  # type: ignore[reportIncompatibleVariableOverride]
@@ -283,6 +304,14 @@ class PowerViewCoverBase(PassiveBluetoothCoordinatorEntity[PVCoordinator], Cover
         except (BleakError, TimeoutError) as err:
             LOGGER.error("Failed to stop cover '%s': %s", self.name, err)
 
+    async def async_set_tdbu_position(
+        self, top_position: int, bottom_position: int
+    ) -> None:
+        """Handle set_tdbu_position on a shade that has no second rail."""
+        raise ServiceValidationError(
+            f"{self.entity_id} is not a rail of a top-down/bottom-up shade"
+        )
+
 
 class PowerViewCover(PowerViewCoverBase):
     """A shade represented by one entity, named after its device."""
@@ -440,7 +469,71 @@ class PowerViewCoverTopDown(PowerViewCover):
         return ShadeMove(pos1=OPEN_POSITION - target)
 
 
-class PowerViewCoverTDBUBottom(PowerViewCoverBase):
+class PowerViewCoverTDBURail(PowerViewCoverBase):
+    """Shared behaviour for both rail entities of a Top-Down/Bottom-Up shade."""
+
+    @callback
+    def _rail_target(self, top_position: int, bottom_position: int) -> int:
+        """Return which of the two requested positions this rail moves to."""
+        raise NotImplementedError
+
+    @callback
+    def _shade_rails(self) -> list["PowerViewCoverTDBURail"]:
+        """Return both rail entities of this shade, this one included.
+
+        A two-rail move changes where both rails are heading, so both have to
+        learn the new target; otherwise the rail the service was not called on
+        keeps its old one and reports opening/closing the wrong way for as long
+        as the link stays up.
+        """
+        rails = [
+            entity
+            for entity in (self.platform.entities.values() if self.platform else ())
+            if isinstance(entity, PowerViewCoverTDBURail)
+            and entity._coord is self._coord  # noqa: SLF001
+        ]
+        return rails or [self]
+
+    async def async_set_tdbu_position(
+        self, top_position: int, bottom_position: int
+    ) -> None:
+        """Move both rails in one SET_POSITION command.
+
+        Positions are Home Assistant facing (0 = rail down, 100 = rail up).
+        Sending both axes at once means neither rail is clamped against the
+        other's *current* position, which is what silently drops a single-rail
+        move whose path the other rail still blocks.
+        """
+        if bottom_position > top_position:
+            raise ServiceValidationError(
+                f"Bottom rail ({bottom_position}%) cannot be above the top rail "
+                f"({top_position}%)"
+            )
+        top_raw = self._fresh_position(ATTR_CURRENT_POSITION)
+        top_now = OPEN_POSITION - top_raw if top_raw is not None else None
+        bottom_now = self._fresh_position("position2")
+        rails = self._shade_rails()
+        if (
+            top_now == top_position
+            and bottom_now == bottom_position
+            and not any(rail.is_closing or rail.is_opening for rail in rails)
+        ):
+            return
+        description = f"move rails to top {top_position}%, bottom {bottom_position}%"
+        for rail in rails:
+            rail._target_position = rail._rail_target(top_position, bottom_position)  # noqa: SLF001
+        if not await self._async_send_move(
+            ShadeMove(pos1=OPEN_POSITION - top_position, pos2=bottom_position),
+            description,
+        ):
+            for rail in rails:
+                rail._reset_target_position()  # noqa: SLF001
+        for rail in rails:
+            if rail is not self:
+                rail.async_write_ha_state()
+
+
+class PowerViewCoverTDBUBottom(PowerViewCoverTDBURail):
     """Rail driven by position1/primary of a dual-rail Top-Down/Bottom-Up shade.
 
     The official Hunter Douglas PowerView integration in home-assistant/core
@@ -489,8 +582,13 @@ class PowerViewCoverTDBUBottom(PowerViewCoverBase):
         """Invert the target back into the device's own axis."""
         return ShadeMove(pos1=OPEN_POSITION - target)
 
+    @callback
+    def _rail_target(self, top_position: int, bottom_position: int) -> int:
+        """Return the top rail's target; this entity is the physical top rail."""
+        return top_position
 
-class PowerViewCoverTDBUTop(PowerViewCoverBase):
+
+class PowerViewCoverTDBUTop(PowerViewCoverTDBURail):
     """Rail driven by position2/secondary of a dual-rail Top-Down/Bottom-Up shade.
 
     TDBU shades (type 8/9/33/47) have two independently-movable rails, but
@@ -546,6 +644,11 @@ class PowerViewCoverTDBUTop(PowerViewCoverBase):
         (observed: requested 20/70 ended at HA 70/70, device pos1+pos2=100).
         """
         return ShadeMove(pos1=KEEP_POSITION, pos2=target)
+
+    @callback
+    def _rail_target(self, top_position: int, bottom_position: int) -> int:
+        """Return the bottom rail's target; this entity is the physical bottom rail."""
+        return bottom_position
 
 
 class PowerViewCoverDuoliteBase(PowerViewCoverBase):

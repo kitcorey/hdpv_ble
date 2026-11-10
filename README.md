@@ -200,6 +200,26 @@ Rear | The rear opaque fabric alone
 Type 38 (Silhouette Duolite) also tilts, on its combined entity. The backlight
 of type 95 (Aura Illuminated) is not exposed.
 
+### Top-down/bottom-up shades
+
+Each rail has its own cover entity, and a rail can't be moved past the other.
+A single-rail move that the other rail is in the way of is not sent, so moving
+both rails one after the other can need a wait in between.
+
+`hunterdouglas_powerview_ble.set_tdbu_position` moves both rails in one command
+instead. Target either rail entity of the shade. Positions are 0 (rail all the
+way down) to 100 (all the way up), and the bottom rail can't be above the top
+rail:
+
+```yaml
+action: hunterdouglas_powerview_ble.set_tdbu_position
+target:
+  entity_id: cover.bedroom_shade_top_rail
+data:
+  top_position: 100
+  bottom_position: 0
+```
+
 ## How it works
 
 - **Shade state arrives from Bluetooth advertisements**, not polling, so there
