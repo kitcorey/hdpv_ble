@@ -10,6 +10,9 @@ name: Release
 # Versions are always plain X.Y.Z, including pre-releases. A pre-release is the
 # same version number as the eventual stable one, distinguished only by GitHub's
 # pre-release flag, so promoting it needs no rebuild: see .github/RELEASING.md.
+#
+# On a fork, GitHub only lists this workflow (and accepts dispatches for it)
+# once a commit on the fork has touched this file.
 on:
   workflow_dispatch:
     inputs:
