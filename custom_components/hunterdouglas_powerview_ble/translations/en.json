@@ -102,6 +102,24 @@
           "description": "Where the bottom rail goes: 0 is all the way down, 100 all the way up."
         }
       }
+    },
+    "group_move": {
+      "name": "Group move",
+      "description": "Moves several shades to the same position so they start together. Connects to every shade first, then sends all the commands at once. Each shade needs a free Bluetooth connection slot at the same moment. Returns which shades moved in step, moved late, failed, or were already there.",
+      "fields": {
+        "entity_id": {
+          "name": "Shades",
+          "description": "The shades to move. Include only one entity per shade."
+        },
+        "position": {
+          "name": "Position",
+          "description": "Where the shades go: 0 is closed, 100 fully open."
+        },
+        "connect_timeout": {
+          "name": "Connect timeout",
+          "description": "How long to wait for every shade to connect before moving the ones that have. A shade that connects later is moved as soon as it does."
+        }
+      }
     }
   }
 }

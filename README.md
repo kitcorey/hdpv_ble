@@ -220,6 +220,41 @@ data:
   bottom_position: 0
 ```
 
+### Moving several shades together
+
+Moving a group of shades with an ordinary `cover.set_cover_position` call
+staggers them: each shade's command waits for its own Bluetooth connection, and
+that can take anywhere from a fraction of a second to several seconds.
+`hunterdouglas_powerview_ble.group_move` connects to every shade first, then
+sends all the commands at once, so the shades start together:
+
+```yaml
+action: hunterdouglas_powerview_ble.group_move
+data:
+  entity_id:
+    - cover.sunroom_shade_1
+    - cover.sunroom_shade_2
+    - cover.sunroom_shade_3
+    - cover.sunroom_shade_4
+    - cover.sunroom_shade_5
+  position: 50
+  connect_timeout: 10
+response_variable: group_move
+```
+
+- `connect_timeout` (seconds, default 10) is how long to wait for all the shades
+  to connect. Shades that connected by then move together; a shade that
+  connects later is moved as soon as it does.
+- The response lists entity IDs under `moved` (moved together), `late`,
+  `failed` and `skipped` (already at the position). The call returns once every
+  shade has an outcome.
+- Include one entity per shade. For both rails of a top-down/bottom-up shade,
+  use `set_tdbu_position`.
+- **Every shade needs a free connection slot at the same moment.** Moving five
+  shades needs five slots across your adapters and proxies. An ESPHome
+  Bluetooth proxy defaults to 3; raise `connection_slots` under
+  `bluetooth_proxy` if the shades share one proxy.
+
 ## How it works
 
 - **Shade state arrives from Bluetooth advertisements**, not polling, so there
