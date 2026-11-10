@@ -477,6 +477,23 @@ class PowerViewCoverTDBURail(PowerViewCoverBase):
         """Return which of the two requested positions this rail moves to."""
         raise NotImplementedError
 
+    @callback
+    def _shade_rails(self) -> list["PowerViewCoverTDBURail"]:
+        """Return both rail entities of this shade, this one included.
+
+        A two-rail move changes where both rails are heading, so both have to
+        learn the new target; otherwise the rail the service was not called on
+        keeps its old one and reports opening/closing the wrong way for as long
+        as the link stays up.
+        """
+        rails = [
+            entity
+            for entity in (self.platform.entities.values() if self.platform else ())
+            if isinstance(entity, PowerViewCoverTDBURail)
+            and entity._coord is self._coord  # noqa: SLF001
+        ]
+        return rails or [self]
+
     async def async_set_tdbu_position(
         self, top_position: int, bottom_position: int
     ) -> None:
@@ -495,19 +512,25 @@ class PowerViewCoverTDBURail(PowerViewCoverBase):
         top_raw = self._fresh_position(ATTR_CURRENT_POSITION)
         top_now = OPEN_POSITION - top_raw if top_raw is not None else None
         bottom_now = self._fresh_position("position2")
+        rails = self._shade_rails()
         if (
             top_now == top_position
             and bottom_now == bottom_position
-            and not (self.is_closing or self.is_opening)
+            and not any(rail.is_closing or rail.is_opening for rail in rails)
         ):
             return
         description = f"move rails to top {top_position}%, bottom {bottom_position}%"
-        self._target_position = self._rail_target(top_position, bottom_position)
+        for rail in rails:
+            rail._target_position = rail._rail_target(top_position, bottom_position)  # noqa: SLF001
         if not await self._async_send_move(
             ShadeMove(pos1=OPEN_POSITION - top_position, pos2=bottom_position),
             description,
         ):
-            self._reset_target_position()
+            for rail in rails:
+                rail._reset_target_position()  # noqa: SLF001
+        for rail in rails:
+            if rail is not self:
+                rail.async_write_ha_state()
 
 
 class PowerViewCoverTDBUBottom(PowerViewCoverTDBURail):
