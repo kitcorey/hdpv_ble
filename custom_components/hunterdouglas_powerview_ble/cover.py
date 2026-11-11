@@ -521,6 +521,19 @@ class PowerViewCoverTDBURail(PowerViewCoverBase):
         other's *current* position, which is what silently drops a single-rail
         move whose path the other rail still blocks.
         """
+        if (planned := self._plan_tdbu_move(top_position, bottom_position)) is not None:
+            await self._async_send_tdbu_planned(*planned)
+
+    @callback
+    def _plan_tdbu_move(
+        self, top_position: int, bottom_position: int
+    ) -> tuple[ShadeMove, str] | None:
+        """Work out a two-rail move and record both rails' targets.
+
+        Returns the move with its log description, or None when both rails
+        are already there. Kept apart from the send so the group_move service
+        can plan every shade before connecting to any.
+        """
         if bottom_position > top_position:
             raise ServiceValidationError(
                 f"Bottom rail ({bottom_position}%) cannot be above the top rail "
@@ -535,19 +548,25 @@ class PowerViewCoverTDBURail(PowerViewCoverBase):
             and bottom_now == bottom_position
             and not any(rail.is_closing or rail.is_opening for rail in rails)
         ):
-            return
-        description = f"move rails to top {top_position}%, bottom {bottom_position}%"
+            return None
         for rail in rails:
             rail._target_position = rail._rail_target(top_position, bottom_position)  # noqa: SLF001
-        if not await self._async_send_move(
+        return (
             ShadeMove(pos1=OPEN_POSITION - top_position, pos2=bottom_position),
-            description,
-        ):
+            f"move rails to top {top_position}%, bottom {bottom_position}%",
+        )
+
+    async def _async_send_tdbu_planned(self, move: ShadeMove, description: str) -> bool:
+        """Send a move from ``_plan_tdbu_move``, keeping both rails in step."""
+        rails = self._shade_rails()
+        sent = await self._async_send_move(move, description)
+        if not sent:
             for rail in rails:
                 rail._reset_target_position()  # noqa: SLF001
         for rail in rails:
             if rail is not self:
                 rail.async_write_ha_state()
+        return sent
 
 
 class PowerViewCoverTDBUBottom(PowerViewCoverTDBURail):

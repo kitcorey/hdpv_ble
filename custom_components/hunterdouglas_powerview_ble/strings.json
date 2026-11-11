@@ -105,15 +105,23 @@
     },
     "group_move": {
       "name": "Group move",
-      "description": "Moves several shades to the same position so they start together. Connects to every shade first, then sends all the commands at once. Each shade needs a free Bluetooth connection slot at the same moment. Returns which shades moved in step, moved late, failed, or were already there.",
+      "description": "Moves several shades so they start together. Connects to every shade first, then sends all the commands at once. Give a position, or for top-down/bottom-up shades a top and bottom rail position. Each shade needs a free Bluetooth connection slot at the same moment. Returns which shades moved in step, moved late, failed, or were already there.",
       "fields": {
         "entity_id": {
           "name": "Shades",
-          "description": "The shades to move. Include only one entity per shade."
+          "description": "The shades to move. Include only one entity per shade; with rail positions, either rail of each shade."
         },
         "position": {
           "name": "Position",
-          "description": "Where the shades go: 0 is closed, 100 fully open."
+          "description": "Where the shades go: 0 is closed, 100 fully open. Leave empty when giving rail positions."
+        },
+        "top_position": {
+          "name": "Top rail position",
+          "description": "Top-down/bottom-up shades only, with bottom rail position: where the top rail goes, 0 all the way down, 100 all the way up."
+        },
+        "bottom_position": {
+          "name": "Bottom rail position",
+          "description": "Top-down/bottom-up shades only, with top rail position: where the bottom rail goes. It can't be above the top rail."
         },
         "connect_timeout": {
           "name": "Connect timeout",

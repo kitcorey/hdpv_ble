@@ -31,8 +31,21 @@ group_move:
           domain: cover
           multiple: true
     position:
-      required: true
       example: 50
+      selector:
+        number:
+          min: 0
+          max: 100
+          unit_of_measurement: "%"
+    top_position:
+      example: 100
+      selector:
+        number:
+          min: 0
+          max: 100
+          unit_of_measurement: "%"
+    bottom_position:
+      example: 0
       selector:
         number:
           min: 0
