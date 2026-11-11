@@ -26,6 +26,11 @@ SERVICE_SET_TDBU_POSITION: Final[str] = "set_tdbu_position"
 ATTR_TOP_POSITION: Final[str] = "top_position"
 ATTR_BOTTOM_POSITION: Final[str] = "bottom_position"
 
+# Moves several shades together: connects to all of them first, then sends
+# every command at once, so connect times don't stagger the start.
+SERVICE_GROUP_MOVE: Final[str] = "group_move"
+ATTR_CONNECT_TIMEOUT: Final[str] = "connect_timeout"
+
 # dispatcher signal for newly discovered shades (format with entry_id)
 SIGNAL_NEW_SHADE: Final[str] = f"{DOMAIN}_new_shade_{{entry_id}}"
 

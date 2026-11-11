@@ -794,6 +794,16 @@ class PowerViewBLE:
             return False
         return True
 
+    async def connect(self) -> None:
+        """Bring the link up ahead of a command, without sending anything.
+
+        Lets a caller pay the connect (and the clock sync a fresh link runs)
+        up front, so a later command goes straight onto the wire -- which is
+        what allows several shades to be started in step.
+        """
+        async with self._cmd_lock:
+            await self._connect()
+
     async def _connect(self) -> None:
         """Connect and subscribe if not already, retrying once on failure."""
         if self.is_connected:

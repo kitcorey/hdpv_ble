@@ -24,7 +24,11 @@ from homeassistant.components.bluetooth.const import DOMAIN as BLUETOOTH_DOMAIN
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import Platform
 from homeassistant.core import HomeAssistant, callback
-from homeassistant.helpers import device_registry as dr, entity_registry as er
+from homeassistant.helpers import (
+    config_validation as cv,
+    device_registry as dr,
+    entity_registry as er,
+)
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
 from homeassistant.helpers.device_registry import format_mac
 from homeassistant.helpers.dispatcher import (
@@ -32,6 +36,7 @@ from homeassistant.helpers.dispatcher import (
     async_dispatcher_send,
 )
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
+from homeassistant.helpers.typing import ConfigType
 
 from .api import POWER_TYPE_KNOWN, UUID_COV_SERVICE as UUID, V2_RECORD_LEN
 from .const import (
@@ -44,6 +49,9 @@ from .const import (
     SIGNAL_NEW_SHADE,
 )
 from .coordinator import PVCoordinator, shade_id_for
+from .services import async_setup_services
+
+CONFIG_SCHEMA = cv.config_entry_only_config_schema(DOMAIN)
 
 PLATFORMS: list[Platform] = [
     Platform.BINARY_SENSOR,
@@ -342,6 +350,12 @@ async def _async_setup_shade(
         SIGNAL_NEW_SHADE.format(entry_id=entry.entry_id),
         coordinator,
     )
+
+
+async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
+    """Register services that span every shade, whichever entry owns it."""
+    async_setup_services(hass)
+    return True
 
 
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntryType) -> bool:

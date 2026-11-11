@@ -255,8 +255,14 @@ class PowerViewCoverBase(PassiveBluetoothCoordinatorEntity[PVCoordinator], Cover
         self.async_write_ha_state()
         return True
 
-    async def _async_move_to(self, target: float) -> None:
-        """Move the shade to a Home Assistant facing position."""
+    @callback
+    def _plan_move(self, target: float) -> tuple[ShadeMove, str] | None:
+        """Work out the move for a Home Assistant facing position.
+
+        Records the new target and returns the move with its log description,
+        or None when there is nothing to send. Kept apart from the send so the
+        group_move service can plan every shade before connecting to any.
+        """
         requested = round(target)
         clamped = self._clamp_cover_limit(requested)
         if clamped is None:
@@ -265,21 +271,32 @@ class PowerViewCoverBase(PassiveBluetoothCoordinatorEntity[PVCoordinator], Cover
                 self._coord.name,
                 requested,
             )
-            return
+            return None
         if self.current_cover_position == clamped and not (
             self.is_closing or self.is_opening
         ):
-            return
+            return None
         if (move := self._get_shade_move(clamped)) is None:
             LOGGER.debug(
                 "%s: dropping move to %i%%, no position to restate",
                 self._coord.name,
                 clamped,
             )
-            return
+            return None
         self._target_position = clamped
-        if not await self._async_send_move(move, f"move to {clamped}%"):
-            self._reset_target_position()
+        return move, f"move to {clamped}%"
+
+    async def _async_send_planned(self, move: ShadeMove, description: str) -> bool:
+        """Send a move from ``_plan_move``, dropping the target if it fails."""
+        if await self._async_send_move(move, description):
+            return True
+        self._reset_target_position()
+        return False
+
+    async def _async_move_to(self, target: float) -> None:
+        """Move the shade to a Home Assistant facing position."""
+        if (planned := self._plan_move(target)) is not None:
+            await self._async_send_planned(*planned)
 
     async def async_set_cover_position(self, **kwargs: Any) -> None:
         """Move the cover to a specific position."""
