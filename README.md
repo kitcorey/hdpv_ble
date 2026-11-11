@@ -248,8 +248,20 @@ response_variable: group_move
 - The response lists entity IDs under `moved` (moved together), `late`,
   `failed` and `skipped` (already at the position). The call returns once every
   shade has an outcome.
-- Include one entity per shade. For both rails of a top-down/bottom-up shade,
-  use `set_tdbu_position`.
+- Include one entity per shade.
+- For top-down/bottom-up shades, give `top_position` and `bottom_position`
+  instead of `position` and list either rail of each shade. Both rails move in
+  one command per shade, as with `set_tdbu_position`:
+
+  ```yaml
+  action: hunterdouglas_powerview_ble.group_move
+  data:
+    entity_id:
+      - cover.bedroom_shade_1_top_rail
+      - cover.bedroom_shade_2_top_rail
+    top_position: 100
+    bottom_position: 0
+  ```
 - **Every shade needs a free connection slot at the same moment.** Moving five
   shades needs five slots across your adapters and proxies. An ESPHome
   Bluetooth proxy defaults to 3; raise `connection_slots` under
