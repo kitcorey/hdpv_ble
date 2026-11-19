@@ -85,7 +85,9 @@ def async_setup_services(hass: HomeAssistant) -> None:
 
     async def _async_group_move(call: ServiceCall) -> ServiceResponse:
         rails = ATTR_POSITION not in call.data
-        entities = _resolve_covers(hass, call.data[ATTR_ENTITY_ID], rails=rails)
+        entities, unloaded = _resolve_covers(
+            hass, call.data[ATTR_ENTITY_ID], rails=rails
+        )
         planned: dict[PowerViewCoverBase, _Plan | None] = {}
         for entity in entities:
             if rails:
@@ -98,7 +100,13 @@ def async_setup_services(hass: HomeAssistant) -> None:
                 plan = entity._plan_move(call.data[ATTR_POSITION])  # noqa: SLF001
                 send = entity._async_send_planned  # noqa: SLF001
             planned[entity] = None if plan is None else (*plan, send)
-        return await _group_move(planned, call.data[ATTR_CONNECT_TIMEOUT])
+        result = await _group_move(planned, call.data[ATTR_CONNECT_TIMEOUT])
+        if unloaded:
+            LOGGER.warning(
+                "group_move: %s not loaded, moved the rest", ", ".join(unloaded)
+            )
+            result["failed"] = [*unloaded, *result["failed"]]
+        return cast("ServiceResponse", result)
 
     hass.services.async_register(
         DOMAIN,
@@ -112,10 +120,13 @@ def async_setup_services(hass: HomeAssistant) -> None:
 @callback
 def _resolve_covers(
     hass: HomeAssistant, entity_ids: list[str], *, rails: bool
-) -> list["PowerViewCoverBase"]:
+) -> tuple[list["PowerViewCoverBase"], list[str]]:
     """Map entity IDs to this integration's cover entities, one per shade.
 
-    With ``rails``, every entity must be a rail of a top-down/bottom-up shade.
+    Also returns the IDs that aren't loaded. A shade's entities only exist once
+    it has advertised since startup, so one unheard shade fails on its own
+    instead of stopping the rest. With ``rails``, every loaded entity must be a
+    rail of a top-down/bottom-up shade.
     """
     covers: dict[str, PowerViewCoverBase] = {}
     for platform in entity_platform.async_get_platforms(hass, DOMAIN):
@@ -123,10 +134,12 @@ def _resolve_covers(
             covers.update(cast("dict[str, PowerViewCoverBase]", platform.entities))
 
     entities: list[PowerViewCoverBase] = []
+    unloaded: list[str] = []
     shades: dict[int, str] = {}
     for entity_id in dict.fromkeys(entity_ids):
         if (entity := covers.get(entity_id)) is None:
-            raise ServiceValidationError(f"{entity_id} is not a {DOMAIN} cover")
+            unloaded.append(entity_id)
+            continue
         if not entity.supported_features & CoverEntityFeature.SET_POSITION:
             raise ServiceValidationError(f"{entity_id} cannot be set to a position")
         # Duck-typed: cover.py can't be imported here at runtime.
@@ -144,7 +157,7 @@ def _resolve_covers(
             )
         shades[id(entity.coordinator)] = entity_id
         entities.append(entity)
-    return entities
+    return entities, unloaded
 
 
 async def _async_connect(entity: "PowerViewCoverBase") -> bool:
@@ -159,7 +172,7 @@ async def _async_connect(entity: "PowerViewCoverBase") -> bool:
 
 async def _group_move(
     plans: dict["PowerViewCoverBase", _Plan | None], connect_timeout: float
-) -> ServiceResponse:
+) -> dict[str, list[str]]:
     """Connect to every shade, then send all the moves at once.
 
     A shade that is not connected by ``connect_timeout`` is sent its move as
@@ -181,7 +194,7 @@ async def _group_move(
         else:
             planned[entity] = plan
     if not planned:
-        return cast("ServiceResponse", result)
+        return result
 
     connects: dict[PowerViewCoverBase, asyncio.Task[bool]] = {
         entity: asyncio.create_task(_async_connect(entity)) for entity in planned
@@ -217,4 +230,4 @@ async def _group_move(
 
     if result["failed"]:
         LOGGER.warning("group_move: %s did not move", ", ".join(result["failed"]))
-    return cast("ServiceResponse", result)
+    return result
