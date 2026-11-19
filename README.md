@@ -248,6 +248,8 @@ response_variable: group_move
 - The response lists entity IDs under `moved` (moved together), `late`,
   `failed` and `skipped` (already at the position). The call returns once every
   shade has an outcome.
+- A shade not heard since Home Assistant started has no loaded entity yet. It
+  is listed under `failed` and the other shades still move.
 - Include one entity per shade.
 - For top-down/bottom-up shades, give `top_position` and `bottom_position`
   instead of `position` and list either rail of each shade. Both rails move in

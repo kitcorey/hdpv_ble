@@ -11,6 +11,7 @@ on:
     paths:
       - '**.py'
       - 'requirements.txt'
+      - 'requirements_test.txt'
       - 'pyproject.toml'
       - '.github/workflows/lint.yml'
   workflow_dispatch:
@@ -37,10 +38,13 @@ jobs:
           cache: "pip"
 
       - name: Install requirements
-        run: python3 -m pip install -r requirements.txt
+        run: python3 -m pip install -r requirements_test.txt
 
       - name: Run ruff
         run: ruff check .
 
       - name: Run mypy
         run: mypy .
+
+      - name: Run tests
+        run: pytest
