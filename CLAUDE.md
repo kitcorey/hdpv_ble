@@ -32,7 +32,7 @@ scripts/            # standalone maintainer tools, not shipped to users
 
 `custom_components/hunterdouglas_powerview_ble/` holds the integration. Entity platforms are named for what they do; the rest are `__init__.py` (setup, unload, hub fetch, shade discovery dispatch), `api.py` (the `PowerViewBLE` transport, `ShadeCmd`, `ShadeCapability`) and `coordinator.py` (`PVCoordinator`). `translations/` holds `en` only.
 
-There is **no test suite and no test config** — the dead `[tool.pytest.ini_options]` block and `requirements_test.txt` were removed on 2026-08-01 as unreferenced. Adding tests means bringing the config back too.
+Tests live in `tests/` and run with plain `pytest` (no `pytest-homeassistant-custom-component`); they stand in fakes for entities and `hass` rather than booting Home Assistant. `requirements_test.txt` adds pytest and the packages Home Assistant's `bluetooth` and `usb` components need to import, pinned to the `homeassistant` version in `requirements.txt` — bump them together.
 
 ## How it works
 
@@ -69,6 +69,7 @@ Run locally before every commit — this is a recurring source of CI failures:
 ```sh
 ruff check .
 mypy .
+pytest
 codespell -L hass
 ```
 

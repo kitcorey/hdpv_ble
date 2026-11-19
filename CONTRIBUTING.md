@@ -52,12 +52,13 @@ worth an issue, and it will be taken on those terms.
 
 ## Development
 
-Python 3.13.2+, then `pip install -r requirements.txt`. Run all three before
+Python 3.13.2+, then `pip install -r requirements_test.txt`. Run these before
 every commit; CI runs them on pull requests:
 
 ```sh
 ruff check .
 mypy .
+pytest
 codespell -L hass
 ```
 

@@ -194,3 +194,6 @@ split-on-trailing-comma = false
 # D-Bus GATT API. Deliberately not in requirements.txt - see emu/linux/README.md.
 module = ["dbus.*", "gi.*"]
 ignore_missing_imports = true
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
