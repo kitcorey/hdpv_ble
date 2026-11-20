@@ -73,7 +73,7 @@ pytest
 codespell -L hass
 ```
 
-Minimum supported Home Assistant is `2024.11.0`, declared in `hacs.json`; `requirements.txt` pins the version CI develops against.
+Minimum supported Home Assistant is `2026.11.0`, declared in `hacs.json`; `requirements.txt` pins the version CI develops against.
 
 `manifest.json` is validated only by hassfest, which runs in CI, not locally — a bad manifest change isn't caught before you push. The `categories` values are an enum hassfest checks against that **pinned** version, so a value current core accepts (`blinds_curtains`, say) still fails when it postdates the pin. `categories` is optional for custom integrations and only clears a HACS warning, so don't add it — or any manifest field — on spec; confirm it validates first.
 

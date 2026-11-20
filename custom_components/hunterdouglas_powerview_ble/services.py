@@ -4,7 +4,7 @@ import asyncio
 from collections.abc import Awaitable, Callable
 from typing import TYPE_CHECKING, Any, Final, cast
 
-import voluptuous as vol
+import probatio as vol
 
 from homeassistant.components.cover import (
     ATTR_POSITION,
@@ -120,7 +120,7 @@ def async_setup_services(hass: HomeAssistant) -> None:
 @callback
 def _resolve_covers(
     hass: HomeAssistant, entity_ids: list[str], *, rails: bool
-) -> tuple[list["PowerViewCoverBase"], list[str]]:
+) -> tuple[list[PowerViewCoverBase], list[str]]:
     """Map entity IDs to this integration's cover entities, one per shade.
 
     Also returns the IDs that aren't loaded. A shade's entities only exist once
@@ -160,7 +160,7 @@ def _resolve_covers(
     return entities, unloaded
 
 
-async def _async_connect(entity: "PowerViewCoverBase") -> bool:
+async def _async_connect(entity: PowerViewCoverBase) -> bool:
     """Bring a shade's link up, returning whether it came up."""
     try:
         await entity.coordinator.api.connect()
@@ -171,7 +171,7 @@ async def _async_connect(entity: "PowerViewCoverBase") -> bool:
 
 
 async def _group_move(
-    plans: dict["PowerViewCoverBase", _Plan | None], connect_timeout: float
+    plans: dict[PowerViewCoverBase, _Plan | None], connect_timeout: float
 ) -> dict[str, list[str]]:
     """Connect to every shade, then send all the moves at once.
 
@@ -209,7 +209,7 @@ async def _group_move(
         "group_move: %i of %i shades connected, sending", len(in_step), len(planned)
     )
 
-    async def _send(entity: "PowerViewCoverBase") -> bool:
+    async def _send(entity: PowerViewCoverBase) -> bool:
         if entity not in in_step:
             # Outcome deliberately ignored: a failed connect is retried by the
             # send itself, which connects on its own.

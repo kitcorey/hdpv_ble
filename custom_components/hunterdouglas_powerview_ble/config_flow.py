@@ -6,7 +6,7 @@ import struct
 from typing import Any
 
 import aiohttp
-import voluptuous as vol
+import probatio as vol
 
 from homeassistant import config_entries
 from homeassistant.components.bluetooth import BluetoothServiceInfoBleak
@@ -184,7 +184,7 @@ def _homekey_schema(hub_url_prefill: str = "") -> vol.Schema:
 
     It is a `suggested_value` rather than a `default` because the two behave
     quite differently on an emptied box. The frontend drops a cleared optional
-    field from the submitted data, and voluptuous then substitutes a `default`
+    field from the submitted data, and probatio then substitutes a `default`
     -- so clearing the hub URL handed back the very URL being deleted, and the
     field could not be emptied at all. A `suggested_value` only seeds what the
     box opens on, leaving an emptied field genuinely absent.

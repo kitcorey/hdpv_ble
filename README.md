@@ -3,7 +3,7 @@
 [![GitHub Release](https://img.shields.io/github/v/release/safepay/hdpv_ble)](https://github.com/safepay/hdpv_ble/releases)
 [![License](https://img.shields.io/github/license/safepay/hdpv_ble)](https://github.com/safepay/hdpv_ble/blob/main/LICENSE)
 [![HACS](https://img.shields.io/badge/HACS-Custom-orange.svg)](https://github.com/hacs/integration)
-[![Home Assistant](https://img.shields.io/badge/Home%20Assistant-2024.11.0+-blue.svg)](https://www.home-assistant.io/)
+[![Home Assistant](https://img.shields.io/badge/Home%20Assistant-2026.11.0+-blue.svg)](https://www.home-assistant.io/)
 
 Control Hunter Douglas PowerView shades from Home Assistant over Bluetooth LE.
 No cloud account, no vendor app, no dependency on Hunter Douglas's servers.
@@ -13,7 +13,7 @@ the way the PowerView app does.
 
 ## Requirements
 
-- Home Assistant 2024.11.0 or newer.
+- Home Assistant 2026.11.0 or newer.
 - A Bluetooth adapter on your Home Assistant host, or
   [ESPHome Bluetooth proxies](https://esphome.io/components/bluetooth_proxy)
   within range of the shades.
