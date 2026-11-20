@@ -288,6 +288,13 @@ to drive it with. Diagnostics show `"encrypted": true` alongside
 fails against a `.local` hub URL, try the hub's IP address — mDNS often does
 not resolve from inside a container.
 
+**A shade stays unavailable after a restart.** A shade is set up the first time
+an adapter or proxy that can connect to it hears it. If none can yet, for
+example while a proxy is still reconnecting, it is retried on every
+advertisement it sends, so it is picked up as soon as one can, without moving
+it. After 5 minutes a warning names the shade and gives Home Assistant's reason
+it can't be reached.
+
 For anything else:
 
 1. Enable debug logging for the integration.

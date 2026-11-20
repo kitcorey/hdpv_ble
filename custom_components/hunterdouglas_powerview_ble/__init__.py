@@ -5,7 +5,8 @@
 """
 
 import base64
-from collections.abc import Callable
+from collections.abc import Awaitable, Callable
+from time import monotonic
 from typing import NamedTuple
 
 import aiohttp
@@ -15,6 +16,7 @@ from bleak.exc import BleakError
 from homeassistant.components import bluetooth
 from homeassistant.components.bluetooth import (
     BluetoothCallbackMatcher,
+    BluetoothReachabilityIntent,
     BluetoothScanningMode,
     BluetoothServiceInfoBleak,
     async_ble_device_from_address,
@@ -23,7 +25,7 @@ from homeassistant.components.bluetooth import (
 from homeassistant.components.bluetooth.const import DOMAIN as BLUETOOTH_DOMAIN
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import Platform
-from homeassistant.core import HomeAssistant, callback
+from homeassistant.core import CALLBACK_TYPE, HomeAssistant, callback
 from homeassistant.helpers import (
     config_validation as cv,
     device_registry as dr,
@@ -46,7 +48,9 @@ from .const import (
     DOMAIN,
     LOGGER,
     MFCT_ID,
+    RETRY_MIN_INTERVAL,
     SIGNAL_NEW_SHADE,
+    SKIP_WARN_AFTER,
 )
 from .coordinator import PVCoordinator, shade_id_for
 from .services import async_setup_services
@@ -270,11 +274,115 @@ def _migrate_legacy_identity(hass: HomeAssistant, address: str, shade_id: str) -
     )
 
 
+class _UnreachableShades:
+    """Retry shades that no connectable proxy could reach when first heard.
+
+    Home Assistant drops an advertisement identical to the last one before any
+    change-driven callback sees it, and a shade at rest repeats the same
+    advertisement indefinitely. So a shade whose first setup attempt found no
+    connectable path -- its proxy not yet connected after a restart, or
+    dropping out -- would get no second attempt until it moved. Each such
+    address gets a per-address advertisement callback instead, which fires on
+    every packet, unchanged or not, and the setup is retried as soon as a
+    connectable path exists.
+    """
+
+    def __init__(
+        self,
+        hass: HomeAssistant,
+        retry: Callable[[BluetoothServiceInfoBleak], Awaitable[None]],
+    ) -> None:
+        self._hass = hass
+        self._retry = retry
+        self._cancels: dict[str, CALLBACK_TYPE] = {}
+        self._first_skip: dict[str, float] = {}
+        self._warned: set[str] = set()
+        self._in_flight: set[str] = set()
+        self._last_try: dict[str, float] = {}
+
+    @callback
+    def skipped(self, address: str) -> None:
+        """Watch an address whose setup found no connectable path."""
+        self._first_skip.setdefault(address, monotonic())
+        if address not in self._cancels:
+            self._cancels[address] = bluetooth.async_register_advertisement_callback(
+                self._hass, self._on_advert, address
+            )
+
+    @callback
+    def adopted(self, address: str) -> None:
+        """Stop watching an address that now has a coordinator."""
+        if (cancel := self._cancels.pop(address, None)) is not None:
+            cancel()
+        self._first_skip.pop(address, None)
+        self._last_try.pop(address, None)
+        if address in self._warned:
+            self._warned.discard(address)
+            LOGGER.info("%s is reachable again and has been set up", address)
+
+    @callback
+    def cancel_all(self) -> None:
+        """Drop every watch, for unload."""
+        for cancel in self._cancels.values():
+            cancel()
+        self._cancels.clear()
+
+    @callback
+    def _on_advert(self, service_info: BluetoothServiceInfoBleak) -> None:
+        # Runs for every packet from every scanner that hears the shade, so it
+        # stays cheap: one lookup, and a task only once a path exists.
+        address = service_info.address
+        if address in self._in_flight:
+            return
+        # A retry that finds a path but still can't set the shade up (no V2
+        # record yet) would otherwise go again on the very next packet.
+        now = monotonic()
+        if now - self._last_try.get(address, -RETRY_MIN_INTERVAL) < RETRY_MIN_INTERVAL:
+            return
+        if async_ble_device_from_address(self._hass, address, connectable=True) is None:
+            self._warn_if_stuck(address, service_info.name)
+            return
+        self._in_flight.add(address)
+        self._last_try[address] = now
+        # A task, not a direct call: this callback runs before the manager
+        # records the advertisement, and the setup should see it recorded.
+        self._hass.async_create_task(self._async_retry(service_info))
+
+    async def _async_retry(self, service_info: BluetoothServiceInfoBleak) -> None:
+        address = service_info.address
+        try:
+            await self._retry(
+                bluetooth.async_last_service_info(self._hass, address, connectable=True)
+                or service_info
+            )
+        finally:
+            self._in_flight.discard(address)
+
+    def _warn_if_stuck(self, address: str, name: str) -> None:
+        if address in self._warned:
+            return
+        first = self._first_skip.get(address)
+        if first is None or monotonic() - first < SKIP_WARN_AFTER:
+            return
+        self._warned.add(address)
+        LOGGER.warning(
+            "%s (%s) is advertising but has not been set up for %i s: %s. "
+            "Retrying on every advertisement it sends",
+            name,
+            address,
+            SKIP_WARN_AFTER,
+            bluetooth.async_address_reachability_diagnostics(
+                self._hass, address, BluetoothReachabilityIntent.CONNECTION
+            ),
+        )
+
+
 async def _async_setup_shade(
     hass: HomeAssistant,
     entry: ConfigEntryType,
     service_info: BluetoothServiceInfoBleak,
     hub: HubShades,
+    unreachable: _UnreachableShades,
 ) -> None:
     """Create a coordinator for a newly discovered shade."""
     address = service_info.address
@@ -289,7 +397,8 @@ async def _async_setup_shade(
         hass=hass, address=address, connectable=True
     )
     if not ble_device:
-        LOGGER.debug("BLE device %s not connectable, skipping", address)
+        LOGGER.debug("BLE device %s not connectable, retrying on its adverts", address)
+        unreachable.skipped(address)
         return
 
     shade_id = shade_id_for(ble_device)
@@ -300,6 +409,7 @@ async def _async_setup_shade(
     # second device whose entities collide on unique ID with the first.
     if (known := entry.runtime_data.get(shade_id)) is not None:
         known.async_retarget(ble_device)
+        unreachable.adopted(address)
         return
 
     _migrate_legacy_identity(hass, address, shade_id)
@@ -310,8 +420,11 @@ async def _async_setup_shade(
 
     coordinator = PVCoordinator(hass, ble_device, entry.data.copy(), friendly_name)
 
+    # Nothing above awaits, so two overlapping setups of one shade can't both
+    # get here: the later one finds it in runtime_data and retargets instead.
     entry.runtime_data[shade_id] = coordinator
     entry.async_on_unload(coordinator.async_start())
+    unreachable.adopted(address)
 
     # Populate dev_details before entity dispatch so the device registers with
     # firmware/serial on first creation — the HA registry doesn't re-read
@@ -373,13 +486,21 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntryType) -> bool
     # Forward platforms first so dispatched entities have their setup ready
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
 
+    async def _async_retry(service_info: BluetoothServiceInfoBleak) -> None:
+        await _async_setup_shade(hass, entry, service_info, hub, unreachable)
+
+    unreachable = _UnreachableShades(hass, _async_retry)
+    entry.async_on_unload(unreachable.cancel_all)
+
     # Kick off shade setup for already-discovered BLE devices (non-blocking)
     for service_info in async_discovered_service_info(hass, connectable=True):
         if (
             MFCT_ID in service_info.manufacturer_data
             and UUID in service_info.service_uuids
         ):
-            hass.async_create_task(_async_setup_shade(hass, entry, service_info, hub))
+            hass.async_create_task(
+                _async_setup_shade(hass, entry, service_info, hub, unreachable)
+            )
 
     # Register for future BLE discoveries
     def _async_discovered_device(
@@ -397,7 +518,9 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntryType) -> bool
             coord.address == service_info.address
             for coord in entry.runtime_data.values()
         ):
-            hass.async_create_task(_async_setup_shade(hass, entry, service_info, hub))
+            hass.async_create_task(
+                _async_setup_shade(hass, entry, service_info, hub, unreachable)
+            )
 
     entry.async_on_unload(
         bluetooth.async_register_callback(
