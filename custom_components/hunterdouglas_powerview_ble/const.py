@@ -31,6 +31,12 @@ ATTR_BOTTOM_POSITION: Final[str] = "bottom_position"
 SERVICE_GROUP_MOVE: Final[str] = "group_move"
 ATTR_CONNECT_TIMEOUT: Final[str] = "connect_timeout"
 
+# A shade that is advertising but has had no connectable path for this long
+# gets one warning, with Home Assistant's explanation of why.
+SKIP_WARN_AFTER: Final[int] = 300
+# Least time between two retries of one such shade once a path exists.
+RETRY_MIN_INTERVAL: Final[int] = 10
+
 # dispatcher signal for newly discovered shades (format with entry_id)
 SIGNAL_NEW_SHADE: Final[str] = f"{DOMAIN}_new_shade_{{entry_id}}"
 
