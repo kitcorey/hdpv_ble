@@ -2,14 +2,13 @@
 pytest
 # What Home Assistant's bluetooth and usb components need to import, pinned to
 # the homeassistant version in requirements.txt; pip doesn't pull these in.
-aiousbwatcher==1.1.1
-bleak==1.0.1
-bleak-retry-connector==4.4.3
-bluetooth-adapters==2.1.0
-bluetooth-auto-recovery==1.5.3
-bluetooth-data-tools==1.28.4
-dbus-fast==2.44.5
-habluetooth==5.7.0
-pycares<5
-pyserial==3.5
-zeroconf==0.148.0
+aiohasupervisor==0.8.1
+aiousbwatcher==1.1.2
+bleak-retry-connector==4.7.1
+bleak==3.0.2
+bluetooth-adapters==2.4.0
+bluetooth-auto-recovery==1.6.4
+bluetooth-data-tools==1.29.24
+dbus-fast==5.0.22
+habluetooth==7.1.2
+serialx==1.15.1

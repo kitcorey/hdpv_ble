@@ -4,7 +4,7 @@ from math import ceil
 from typing import Any
 
 from bleak.exc import BleakError
-import voluptuous as vol
+import probatio as vol
 
 from homeassistant.components.bluetooth.passive_update_coordinator import (
     PassiveBluetoothCoordinatorEntity,
@@ -495,7 +495,7 @@ class PowerViewCoverTDBURail(PowerViewCoverBase):
         raise NotImplementedError
 
     @callback
-    def _shade_rails(self) -> list["PowerViewCoverTDBURail"]:
+    def _shade_rails(self) -> list[PowerViewCoverTDBURail]:
         """Return both rail entities of this shade, this one included.
 
         A two-rail move changes where both rails are heading, so both have to

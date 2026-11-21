@@ -52,7 +52,7 @@ worth an issue, and it will be taken on those terms.
 
 ## Development
 
-Python 3.13.2+, then `pip install -r requirements_test.txt`. Run these before
+Python 3.14+, then `pip install -r requirements_test.txt`. Run these before
 every commit; CI runs them on pull requests:
 
 ```sh
