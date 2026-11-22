@@ -153,7 +153,9 @@ def _entities(hass: HomeAssistant, coord: PVCoordinator) -> list[dict[str, Any]]
 
     An empty list is itself the first of those answers.
     """
-    device = dr.async_get(hass).async_get_device(identifiers={(DOMAIN, coord.shade_id)})
+    device = dr.async_get(hass).async_get_device_by_identifier(
+        (DOMAIN, coord.shade_id), coord.entry_id
+    )
     if device is None:
         return []
 

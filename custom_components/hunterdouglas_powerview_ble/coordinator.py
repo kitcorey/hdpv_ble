@@ -76,12 +76,17 @@ class PVCoordinator(PassiveBluetoothDataUpdateCoordinator):
         ble_device: BLEDevice,
         data: dict[str, Any],
         friendly_name: str | None = None,
+        *,
+        entry_id: str,
     ) -> None:
         """Initialize the shade data coordinator."""
         # A shade with no local name in its advertisement is not something we
         # have seen, but an assert here died inside a fire-and-forget setup
         # task and took the shade with it. The address is always available.
         self._friendly_name = friendly_name or ble_device.name or ble_device.address
+        # The registry looks devices up per config entry; the Bluetooth
+        # coordinator base class doesn't keep one.
+        self.entry_id = entry_id
         self._shade_id = shade_id_for(ble_device)
         home_key_hex: str = data.get(CONF_HOME_KEY, "")
         home_key: bytes = (
@@ -161,7 +166,9 @@ class PVCoordinator(PassiveBluetoothDataUpdateCoordinator):
         self.hass.async_create_task(self.api.disconnect())
 
         reg = dr.async_get(self.hass)
-        device = reg.async_get_device(identifiers={(DOMAIN, self._shade_id)})
+        device = reg.async_get_device_by_identifier(
+            (DOMAIN, self._shade_id), self.entry_id
+        )
         if device is not None:
             reg.async_update_device(
                 device.id,
@@ -284,7 +291,9 @@ class PVCoordinator(PassiveBluetoothDataUpdateCoordinator):
 
     def _push_device_registry_update(self) -> None:
         reg = dr.async_get(self.hass)
-        device = reg.async_get_device(identifiers={(DOMAIN, self._shade_id)})
+        device = reg.async_get_device_by_identifier(
+            (DOMAIN, self._shade_id), self.entry_id
+        )
         if device is None:
             return
         reg.async_update_device(

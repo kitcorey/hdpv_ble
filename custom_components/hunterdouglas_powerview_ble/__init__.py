@@ -226,7 +226,9 @@ def _is_shade_advert(service_info: BluetoothServiceInfoBleak) -> bool:
     return len(service_info.manufacturer_data.get(MFCT_ID, b"")) == V2_RECORD_LEN
 
 
-def _migrate_legacy_identity(hass: HomeAssistant, address: str, shade_id: str) -> None:
+def _migrate_legacy_identity(
+    hass: HomeAssistant, entry_id: str, address: str, shade_id: str
+) -> None:
     """Re-key an existing device and its entities off the Bluetooth address.
 
     Runs when a shade is first set up, which is the only moment both halves of
@@ -244,10 +246,10 @@ def _migrate_legacy_identity(hass: HomeAssistant, address: str, shade_id: str) -
         return  # nameless shade: its identity is the address either way
 
     dev_reg = dr.async_get(hass)
-    if dev_reg.async_get_device(identifiers={(DOMAIN, shade_id)}) is not None:
+    if dev_reg.async_get_device_by_identifier((DOMAIN, shade_id), entry_id) is not None:
         return  # already migrated, or a duplicate device already holds the name
 
-    device = dev_reg.async_get_device(identifiers={(DOMAIN, address)})
+    device = dev_reg.async_get_device_by_identifier((DOMAIN, address), entry_id)
     if device is None:
         return  # not seen before, so it gets the new identity from the start
 
@@ -412,13 +414,15 @@ async def _async_setup_shade(
         unreachable.adopted(address)
         return
 
-    _migrate_legacy_identity(hass, address, shade_id)
+    _migrate_legacy_identity(hass, entry.entry_id, address, shade_id)
 
     friendly_name = _resolve_friendly_name(
         hass, entry, service_info, shade_id, hub.names.get(service_info.name)
     )
 
-    coordinator = PVCoordinator(hass, ble_device, entry.data.copy(), friendly_name)
+    coordinator = PVCoordinator(
+        hass, ble_device, entry.data.copy(), friendly_name, entry_id=entry.entry_id
+    )
 
     # Nothing above awaits, so two overlapping setups of one shade can't both
     # get here: the later one finds it in runtime_data and retargets instead.
